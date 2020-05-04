@@ -1,3 +1,8 @@
+use std::cell::RefCell;
+use std::iter::Peekable;
+use std::rc::Rc;
+use std::str::Chars;
+
 /// LL(1) CFG for the supported regular expression syntax.
 /// https://smlweb.cpsc.ucalgary.ca/vital-stats.php?grammar=UNION+++++-%3E+CONCAT%0D%0A+++++++++++%7C+UNION+cup+CONCAT.%0D%0ACONCAT++++-%3E+UNARY%0D%0A+++++++++++%7C+CONCAT+dot+UNARY.%0D%0AUNARY+++++-%3E+PAREN+UNARYOP.%0D%0AUNARYOP+++-%3E+*%0D%0A+++++++++++%7C+%3F%0D%0A+++++++++++%7C+%2B%0D%0A+++++++++++%7C.%0D%0APAREN+++++-%3E+TERM%0D%0A+++++++++++%7C+%28+UNION+%29.%0D%0ATERM++++++-%3E+terminal.%0D%0A
 /// grammar before left-recursion is removed (we don't include $ in the grammar because it's just a
@@ -33,25 +38,83 @@ PAREN →	TERM
 |	( UNION ) .
 TERM →	terminal .
 */
-use std::collections::HashSet;
-use std::iter::Peekable;
-use std::rc::Rc;
-use std::str::Chars;
 
 #[allow(dead_code)]
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq)]
 enum State {
-    Transition { chars: Vec<char>, out: Rc<State> },
-    NonTransition { chars: Vec<char>, out: Rc<State> },
-    Split { out1: Rc<State>, out2: Rc<State> },
+    Transition {
+        chars: Vec<char>,
+        out: Rc<RefCell<State>>,
+    },
+    NonTransition {
+        chars: Vec<char>,
+        out: Rc<RefCell<State>>,
+    },
+    Split {
+        out1: Rc<RefCell<State>>,
+        out2: Rc<RefCell<State>>,
+    },
     Match,
     Nil,
 }
 
+impl State {
+    fn make_nil() -> Rc<RefCell<State>> {
+        Rc::new(RefCell::new(State::Nil))
+    }
+
+    fn make_transition(chars: Vec<char>) -> Rc<RefCell<State>> {
+        Rc::new(RefCell::new(State::Transition {
+            chars,
+            out: State::make_nil(),
+        }))
+    }
+
+    fn _make_nontransition(chars: Vec<char>) -> Rc<RefCell<State>> {
+        Rc::new(RefCell::new(State::NonTransition {
+            chars,
+            out: State::make_nil(),
+        }))
+    }
+
+    fn make_split(out1: Rc<RefCell<State>>, out2: Rc<RefCell<State>>) -> Rc<RefCell<State>> {
+        Rc::new(RefCell::new(State::Split { out1, out2 }))
+    }
+
+    fn make_match() -> Rc<RefCell<State>> {
+        Rc::new(RefCell::new(State::Match))
+    }
+
+    fn point_to(&mut self, to: Rc<RefCell<State>>) {
+        match self {
+            State::Transition {
+                chars: _,
+                ref mut out,
+            } => *out = to,
+            State::NonTransition {
+                chars: _,
+                ref mut out,
+            } => *out = to,
+            State::Split {
+                out1: _,
+                ref mut out2,
+            } => *out2 = to,
+            _ => {}
+        }
+    }
+}
+
 #[allow(dead_code)]
-struct Fragment {
-    start: Rc<State>,
-    danglers: HashSet<Rc<State>>,
+#[derive(Debug, PartialEq)]
+pub struct Fragment {
+    start: Rc<RefCell<State>>,
+    danglers: Vec<Rc<RefCell<State>>>,
+}
+
+impl Fragment {
+    pub fn matches(&self, _s: &str) -> bool {
+        true
+    }
 }
 
 #[allow(dead_code)]
@@ -62,14 +125,25 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub fn parse(s: &str) -> Vec<u32> {
+    pub fn parse(s: &str) -> Option<Fragment> {
         let mut parser = Parser::new(s);
-        parser.parse_union();
         // ensure we are at the end of the string
         if let Some(_) = parser.iter.next() {
             parser.error();
         }
-        parser.errors
+        if parser.errors.len() > 0 {
+            return None;
+        }
+        if let Some(frag) = parser.parse_union() {
+            let m = State::make_match();
+            for dangler_ref in frag.danglers.iter() {
+                let ref mut dangler = *dangler_ref.borrow_mut();
+                dangler.point_to(Rc::clone(&m));
+            }
+            Some(frag)
+        } else {
+            None
+        }
     }
 
     fn new<'b: 'a>(s: &'b str) -> Parser<'a> {
@@ -202,8 +276,35 @@ impl<'a> Parser<'a> {
         f1
     }
 
-    fn unary_operator(f1: Option<Fragment>, _op: Option<char>) -> Option<Fragment> {
-        f1
+    fn unary_operator(f: Option<Fragment>, op: Option<char>) -> Option<Fragment> {
+        if let Some(frag) = f {
+            match op {
+                Some('*') => Some(Self::kleene(frag)),
+                Some('?') => Some(Self::question_mark(frag)),
+                Some('+') => Some(Self::plus(frag)),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
+
+    fn kleene(f: Fragment) -> Fragment {
+        let start = State::make_split(Rc::clone(&f.start), State::make_nil());
+        for dangler_ref in f.danglers.iter() {
+            let ref mut dangler = *dangler_ref.borrow_mut();
+            dangler.point_to(Rc::clone(&start));
+        }
+        let danglers = vec![Rc::clone(&start)];
+        Fragment { start, danglers }
+    }
+
+    fn question_mark(f: Fragment) -> Fragment {
+        f
+    }
+
+    fn plus(f: Fragment) -> Fragment {
+        f
     }
 
     fn character(c: char) -> Fragment {
@@ -211,12 +312,8 @@ impl<'a> Parser<'a> {
     }
 
     fn characters(chars: Vec<char>) -> Fragment {
-        let start = Rc::new(State::Transition {
-            chars,
-            out: Rc::new(State::Nil),
-        });
-        let mut danglers = HashSet::new();
-        danglers.insert(Rc::clone(&start));
+        let start = State::make_transition(chars);
+        let danglers = vec![Rc::clone(&start)];
         Fragment { start, danglers }
     }
 
@@ -254,9 +351,9 @@ mod tests {
             r"\\",
         ];
         for regex in regexes.iter() {
-            assert_eq!(
-                Parser::parse(regex).len(),
-                0,
+            assert_ne!(
+                Parser::parse(regex),
+                None,
                 "\"{}\" should be recognized as valid regex",
                 regex
             );
@@ -280,9 +377,9 @@ mod tests {
             r"\\\",
         ];
         for regex in regexes.iter() {
-            assert_ne!(
-                Parser::parse(regex).len(),
-                0,
+            assert_eq!(
+                Parser::parse(regex),
+                None,
                 r#""{}" should be recognized as an invalid regex"#,
                 regex
             );
