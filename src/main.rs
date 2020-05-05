@@ -1,11 +1,13 @@
 mod parser;
 
 fn main() {
-    println!("Hello, world!");
-    let output = parser::Parser::parse("a*");
-    if let Some(f) = output {
-        println!("{}", f.matches("aaaaaaaaaa"));
-        println!("{}", f.matches("aaaabaaaaa"));
+    let res = parser::Parser::parse("abc");
+    if let Ok(regex) = res {
+        println!("{:?}", regex);
+        println!("{}", regex.find("abc"));
+        println!("{}", regex.find("abd"));
+        println!("{}", regex.find("ab"));
+        println!("{}", regex.find("dabc"));
     } else {
         println!("Error");
     }
