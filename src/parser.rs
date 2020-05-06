@@ -318,6 +318,13 @@ impl<'a> Parser<'a> {
             for &dangler in frag.endstates.iter() {
                 statelist.link(dangler, match_state);
             }
+            // ensure we are at the end of the string
+            if let Some(_) = parser.iter.next() {
+                parser.error();
+            }
+            if parser.errors.len() > 0 {
+                return Err(parser.errors);
+            }
             return Ok(Regex::new(frag.start, statelist));
         }
         // ensure we are at the end of the string
@@ -506,10 +513,10 @@ mod tests {
             r"(abc)(abc)(abc)|(abc)(abc)",
             r"a|b+(c?|d)",
             r"(a|b)",
-            r"(\w)",
-            r"\\",
+            // r"(\w)",
+            // r"\\",
         ];
-        for regex in regexes.iter() {
+        for regex in regexes {
             assert!(
                 Parser::parse(regex).is_ok(),
                 "\"{}\" should be recognized as valid regex",

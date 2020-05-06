@@ -1,7 +1,8 @@
 mod parser;
 
 fn main() {
-    let res = parser::Parser::parse("(a|b)*(http:|https:)//www google com+");
+    let res = parser::Parser::parse(r"(abcd");
+    // let res = parser::Parser::parse("(a|b)*(http:|https:)//www google com+");
     if let Ok(regex) = res {
         println!("{:?}", regex);
         println!("{}", regex.find("http://www google com"));
@@ -17,7 +18,7 @@ fn main() {
         println!("{}", regex.find("aaaa"));
         println!("{}", regex.find("a"));
         println!("{}", regex.find(""));
-    } else {
-        println!("Error");
+    } else if let Err(e) = res {
+        println!("Error: {:?}", e);
     }
 }
