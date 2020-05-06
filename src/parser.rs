@@ -48,8 +48,8 @@ pub struct Fragment {
 #[allow(dead_code)]
 #[derive(Debug)]
 enum State {
-    Transition { chars: Vec<char>, out: i32 }, // TODO change vec to hashset
-    NonTransition { chars: Vec<char>, out: i32 },
+    Transition { chars: HashSet<char>, out: i32 }, // TODO change vec to hashset
+    NonTransition { chars: HashSet<char>, out: i32 },
     Split { out1: i32, out2: i32 },
     Match,
     Nil,
@@ -57,11 +57,11 @@ enum State {
 
 #[allow(dead_code)]
 impl State {
-    fn make_transition(chars: Vec<char>) -> State {
+    fn make_transition(chars: HashSet<char>) -> State {
         State::Transition { chars, out: -1 }
     }
 
-    fn make_nontransition(chars: Vec<char>) -> State {
+    fn make_nontransition(chars: HashSet<char>) -> State {
         State::NonTransition { chars, out: -1 }
     }
 
@@ -223,10 +223,12 @@ impl Regex {
     }
 
     fn character(&mut self, c: char) -> Fragment {
-        self.characters(vec![c])
+        let mut set = HashSet::new();
+        set.insert(c);
+        self.characters(set)
     }
 
-    fn characters(&mut self, chars: Vec<char>) -> Fragment {
+    fn characters(&mut self, chars: HashSet<char>) -> Fragment {
         let state = self.add_state(State::make_transition(chars));
         Fragment {
             start: state,
