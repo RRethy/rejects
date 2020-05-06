@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::iter::Peekable;
 use std::str::Chars;
 
@@ -101,6 +102,7 @@ pub struct Regex {
     start: i32,
 }
 
+#[allow(dead_code)]
 impl Regex {
     pub fn new() -> Regex {
         Regex {
@@ -110,30 +112,60 @@ impl Regex {
     }
 
     pub fn find(&self, s: &str) -> bool {
-        let mut cur = self.start;
+        let mut states = HashSet::new();
+        states.insert(self.start);
+        self.delta(&mut states, self.start, None);
         for c in s.chars() {
-            self.step(&mut cur, c);
-            if cur == -1 {
+            let mut newstates = HashSet::new();
+            for &state in states.iter() {
+                self.delta(&mut newstates, state, Some(c));
+            }
+            if newstates.len() == 0 {
                 return false;
+            } else {
+                states = newstates;
             }
         }
-        if let State::Match = self.states[cur as usize] {
-            return true;
-        }
-        false
+        states.into_iter().filter(|&n| n != -1).any(|n| {
+            if let State::Match = &self.states[n as usize] {
+                true
+            } else {
+                false
+            }
+        })
     }
 
-    fn step(&self, cur: &mut i32, c: char) {
-        let state = &self.states[*cur as usize];
-        match state {
-            State::Transition { chars, out } => {
-                if chars.contains(&c) {
-                    *cur = *out;
-                } else {
-                    *cur = -1;
+    fn delta(&self, newstates: &mut HashSet<i32>, state: i32, symbol: Option<char>) {
+        if state == -1 {
+            return;
+        }
+
+        match &self.states[state as usize] {
+            State::Split { out1, out2 } => {
+                if *out1 != -1 {
+                    newstates.insert(*out1);
+                    self.delta(newstates, *out1, symbol);
+                }
+                if *out2 != -1 {
+                    newstates.insert(*out2);
+                    self.delta(newstates, *out2, symbol);
                 }
             }
-            _ => {}
+            State::Transition { chars, out } => {
+                if let Some(c) = symbol {
+                    if chars.contains(&c) {
+                        newstates.insert(*out);
+                    }
+                }
+            }
+            State::NonTransition { chars, out } => {
+                if let Some(c) = symbol {
+                    if !chars.contains(&c) {
+                        newstates.insert(*out);
+                    }
+                }
+            }
+            _ => {} // TODO Match and Nil
         }
     }
 
