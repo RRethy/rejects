@@ -183,7 +183,14 @@ impl StateList {
     }
 
     fn plus(&mut self, f: Fragment) -> Fragment {
-        f
+        let start = self.add_state(State::make_split(f.start, None));
+        for &dangler in f.endstates.iter() {
+            self.link(dangler, start);
+        }
+        Fragment {
+            start: f.start,
+            endstates: vec![start],
+        }
     }
 
     fn character(&mut self, c: char) -> Fragment {
@@ -201,7 +208,6 @@ impl StateList {
     }
 
     fn add_state(&mut self, state: State) -> usize {
-        // TODO check len
         self.states.push(state);
         self.states.len() - 1
     }
