@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::iter::Peekable;
+use std::ops::Index;
 use std::str::Chars;
 
 /// LL(1) CFG for the supported regular expression syntax.
@@ -37,20 +38,28 @@ PAREN →	TERM
 |	( UNION ) .
 TERM →	terminal .
 */
-
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Fragment {
-    start: i32,
-    endstates: Vec<i32>,
+    start: usize,
+    endstates: Vec<usize>,
 }
 
 #[allow(dead_code)]
 #[derive(Debug)]
 enum State {
-    Transition { chars: HashSet<char>, out: i32 }, // TODO change vec to hashset
-    NonTransition { chars: HashSet<char>, out: i32 },
-    Split { out1: i32, out2: i32 },
+    Transition {
+        chars: HashSet<char>,
+        out: Option<usize>,
+    },
+    NonTransition {
+        chars: HashSet<char>,
+        out: Option<usize>,
+    },
+    Split {
+        out1: usize,
+        out2: Option<usize>,
+    },
     Match,
     Nil,
 }
@@ -58,15 +67,15 @@ enum State {
 #[allow(dead_code)]
 impl State {
     fn make_transition(chars: HashSet<char>) -> State {
-        State::Transition { chars, out: -1 }
+        State::Transition { chars, out: None }
     }
 
     fn make_nontransition(chars: HashSet<char>) -> State {
-        State::NonTransition { chars, out: -1 }
+        State::NonTransition { chars, out: None }
     }
 
-    fn make_split() -> State {
-        State::Split { out1: -1, out2: -1 }
+    fn make_split(out1: usize) -> State {
+        State::Split { out1, out2: None }
     }
 
     fn make_match() -> State {
@@ -77,96 +86,33 @@ impl State {
         State::Nil
     }
 
-    fn set_out(&mut self, newout: i32) {
+    fn set_out(&mut self, newout: usize) {
         match self {
             State::Transition {
                 chars: _,
                 ref mut out,
-            } => *out = newout,
+            } => *out = Some(newout),
             State::NonTransition {
                 chars: _,
                 ref mut out,
-            } => *out = newout,
+            } => *out = Some(newout),
             State::Split {
                 out1: _,
                 ref mut out2,
-            } => *out2 = newout,
+            } => *out2 = Some(newout),
             _ => {} // State::Match and State::Nil but this shouldn't be reached
         }
     }
 }
 
 #[derive(Debug)]
-pub struct Regex {
+struct StateList {
     states: Vec<State>,
-    start: i32,
 }
 
-#[allow(dead_code)]
-impl Regex {
-    pub fn new() -> Regex {
-        Regex {
-            start: -1,
-            states: Vec::new(),
-        }
-    }
-
-    pub fn find(&self, s: &str) -> bool {
-        let mut states = HashSet::new();
-        states.insert(self.start);
-        self.delta(&mut states, self.start, None);
-        for c in s.chars() {
-            let mut newstates = HashSet::new();
-            for &state in states.iter() {
-                self.delta(&mut newstates, state, Some(c));
-            }
-            if newstates.len() == 0 {
-                return false;
-            } else {
-                states = newstates;
-            }
-        }
-        states.into_iter().filter(|&n| n != -1).any(|n| {
-            if let State::Match = &self.states[n as usize] {
-                true
-            } else {
-                false
-            }
-        })
-    }
-
-    fn delta(&self, newstates: &mut HashSet<i32>, state: i32, symbol: Option<char>) {
-        if state == -1 {
-            return;
-        }
-
-        match &self.states[state as usize] {
-            State::Split { out1, out2 } => {
-                if *out1 != -1 {
-                    newstates.insert(*out1);
-                    self.delta(newstates, *out1, symbol);
-                }
-                if *out2 != -1 {
-                    newstates.insert(*out2);
-                    self.delta(newstates, *out2, symbol);
-                }
-            }
-            State::Transition { chars, out } => {
-                if let Some(c) = symbol {
-                    if chars.contains(&c) {
-                        newstates.insert(*out);
-                    }
-                }
-            }
-            State::NonTransition { chars, out } => {
-                if let Some(c) = symbol {
-                    if !chars.contains(&c) {
-                        newstates.insert(*out);
-                    }
-                }
-            }
-            _ => {} // TODO Match and Nil
-        }
+impl StateList {
+    fn new() -> StateList {
+        StateList { states: Vec::new() }
     }
 
     fn union(&mut self, f1: Option<Fragment>, _f2: Option<Fragment>) -> Option<Fragment> {
@@ -203,7 +149,7 @@ impl Regex {
                 Some('*') => Some(self.kleene(frag)),
                 Some('?') => Some(self.question_mark(frag)),
                 Some('+') => Some(self.plus(frag)),
-                _ => Some(frag),
+                _ => Some(frag), // No operand so just return what we have
             }
         } else {
             None
@@ -236,16 +182,92 @@ impl Regex {
         }
     }
 
-    fn add_state(&mut self, state: State) -> i32 {
-        if self.states.len() == std::i32::MAX as usize {
-            // TODO panic
-        }
+    fn add_state(&mut self, state: State) -> usize {
+        // TODO check len
         self.states.push(state);
-        self.states.len() as i32 - 1
+        self.states.len() - 1
     }
 
-    fn link(&mut self, from: i32, to: i32) {
-        &self.states[from as usize].set_out(to);
+    fn link(&mut self, from: usize, to: usize) {
+        &self.states[from].set_out(to);
+    }
+}
+
+impl Index<usize> for StateList {
+    type Output = State;
+
+    fn index(&self, n: usize) -> &State {
+        &self.states[n]
+    }
+}
+
+#[derive(Debug)]
+pub struct Regex {
+    start: usize,
+    statelist: StateList,
+}
+
+#[allow(dead_code)]
+impl Regex {
+    fn new(start: usize, statelist: StateList) -> Regex {
+        Regex { start, statelist }
+    }
+
+    pub fn find(&self, s: &str) -> bool {
+        let mut states = HashSet::new();
+        states.insert(self.start);
+        self.delta(&mut states, self.start, None);
+
+        for c in s.chars() {
+            let mut newstates = HashSet::new();
+            for &state in states.iter() {
+                self.delta(&mut newstates, state, Some(c));
+            }
+            if newstates.len() == 0 {
+                return false;
+            } else {
+                states = newstates;
+            }
+        }
+        states.into_iter().any(|n| {
+            if let State::Match = &self.statelist[n] {
+                true
+            } else {
+                false
+            }
+        })
+    }
+
+    fn delta(&self, newstates: &mut HashSet<usize>, state: usize, symbol: Option<char>) {
+        match &self.statelist[state] {
+            State::Split { out1, out2 } => {
+                newstates.insert(*out1);
+                self.delta(newstates, *out1, symbol);
+                if let Some(out) = *out2 {
+                    newstates.insert(out);
+                    self.delta(newstates, out, symbol);
+                }
+            }
+            State::Transition { chars, out } => {
+                if let Some(c) = symbol {
+                    if let Some(s) = out {
+                        if chars.contains(&c) {
+                            newstates.insert(*s);
+                        }
+                    }
+                }
+            }
+            State::NonTransition { chars, out } => {
+                if let Some(c) = symbol {
+                    if let Some(s) = out {
+                        if !chars.contains(&c) {
+                            newstates.insert(*s);
+                        }
+                    }
+                }
+            }
+            _ => {} // TODO Match and Nil
+        }
     }
 }
 
@@ -259,13 +281,13 @@ pub struct Parser<'a> {
 impl<'a> Parser<'a> {
     pub fn parse(s: &str) -> Result<Regex, Vec<u32>> {
         let mut parser = Parser::new(s);
-        let mut regex = Regex::new();
-        if let Some(frag) = parser.parse_union(&mut regex) {
-            let match_state = regex.add_state(State::make_match());
-            regex.start = frag.start;
+        let mut statelist = StateList::new();
+        if let Some(frag) = parser.parse_union(&mut statelist) {
+            let match_state = statelist.add_state(State::make_match());
             for &dangler in frag.endstates.iter() {
-                regex.link(dangler, match_state);
+                statelist.link(dangler, match_state);
             }
+            return Ok(Regex::new(frag.start, statelist));
         }
         // ensure we are at the end of the string
         if let Some(_) = parser.iter.next() {
@@ -274,7 +296,7 @@ impl<'a> Parser<'a> {
         if parser.errors.len() > 0 {
             return Err(parser.errors);
         }
-        Ok(regex)
+        Err(Vec::new())
     }
 
     fn new<'b: 'a>(s: &'b str) -> Parser<'a> {
@@ -285,75 +307,75 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_union(&mut self, re: &mut Regex) -> Option<Fragment> {
+    fn parse_union(&mut self, statelist: &mut StateList) -> Option<Fragment> {
         match self.iter.peek() {
             Some('(') => {
-                let l = self.parse_concat(re);
-                let r = self.parse_union_prime(re);
-                re.union(l, r)
+                let l = self.parse_concat(statelist);
+                let r = self.parse_union_prime(statelist);
+                statelist.union(l, r)
             }
             Some(')') | Some('*') | Some('?') | Some('+') | Some('|') => self.error(),
             Some(_) => {
-                let l = self.parse_concat(re);
-                let r = self.parse_union_prime(re);
-                re.union(l, r)
+                let l = self.parse_concat(statelist);
+                let r = self.parse_union_prime(statelist);
+                statelist.union(l, r)
             }
             None => self.error(),
         }
     }
 
-    fn parse_union_prime(&mut self, re: &mut Regex) -> Option<Fragment> {
+    fn parse_union_prime(&mut self, statelist: &mut StateList) -> Option<Fragment> {
         match self.iter.peek() {
             Some(')') => None,
             Some('|') => {
                 self.consume();
-                self.parse_union(re)
+                self.parse_union(statelist)
             }
             Some(_) => self.error(),
             None => None,
         }
     }
 
-    fn parse_concat(&mut self, re: &mut Regex) -> Option<Fragment> {
+    fn parse_concat(&mut self, statelist: &mut StateList) -> Option<Fragment> {
         match self.iter.peek() {
             Some('(') => {
-                let l = self.parse_unary(re);
-                let r = self.parse_concat_prime(re);
-                re.concatenation(l, r)
+                let l = self.parse_unary(statelist);
+                let r = self.parse_concat_prime(statelist);
+                statelist.concatenation(l, r)
             }
             Some(')') | Some('*') | Some('?') | Some('+') | Some('|') => self.error(),
             Some(_) => {
-                let l = self.parse_unary(re);
-                let r = self.parse_concat_prime(re);
-                re.concatenation(l, r)
+                let l = self.parse_unary(statelist);
+                let r = self.parse_concat_prime(statelist);
+                statelist.concatenation(l, r)
             }
             None => self.error(),
         }
     }
 
-    fn parse_concat_prime(&mut self, re: &mut Regex) -> Option<Fragment> {
+    fn parse_concat_prime(&mut self, statelist: &mut StateList) -> Option<Fragment> {
         match self.iter.peek() {
-            Some('(') => self.parse_concat(re),
+            Some('(') => self.parse_concat(statelist),
             Some(')') => None,
             Some('*') | Some('?') | Some('+') => self.error(),
             Some('|') => None,
-            Some(_) => self.parse_concat(re),
+            Some(_) => self.parse_concat(statelist),
             None => None,
         }
     }
 
-    fn parse_unary(&mut self, re: &mut Regex) -> Option<Fragment> {
+    fn parse_unary(&mut self, statelist: &mut StateList) -> Option<Fragment> {
         match self.iter.peek() {
             Some('(') => {
-                let l = self.parse_paren(re);
+                let l = self.parse_paren(statelist);
                 let r = self.parse_unaryop();
-                re.unary_operator(l, r)
+                statelist.unary_operator(l, r)
             }
             Some(')') | Some('*') | Some('?') | Some('+') | Some('|') => self.error(),
             Some(_) => {
-                let l = self.parse_paren(re);
+                let l = self.parse_paren(statelist);
                 let r = self.parse_unaryop();
-                re.unary_operator(l, r)
+                statelist.unary_operator(l, r)
             }
             None => self.error(),
         }
@@ -370,11 +392,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_paren(&mut self, re: &mut Regex) -> Option<Fragment> {
+    fn parse_paren(&mut self, statelist: &mut StateList) -> Option<Fragment> {
         match self.iter.peek() {
             Some('(') => {
                 self.consume();
-                let fragment = self.parse_union(re);
+                let fragment = self.parse_union(statelist);
                 if let Some(')') = self.iter.peek() {
                     self.consume();
                     fragment
@@ -383,11 +405,11 @@ impl<'a> Parser<'a> {
                 }
             }
             Some(')') | Some('*') | Some('?') | Some('+') | Some('|') | None => self.error(),
-            Some(_) => self.parse_term(re),
+            Some(_) => self.parse_term(statelist),
         }
     }
 
-    fn parse_term(&mut self, re: &mut Regex) -> Option<Fragment> {
+    fn parse_term(&mut self, statelist: &mut StateList) -> Option<Fragment> {
         match self.iter.peek() {
             Some('(') | Some(')') | Some('*') | Some('?') | Some('+') | Some('|') => self.error(),
             Some('\\') => {
@@ -417,7 +439,7 @@ impl<'a> Parser<'a> {
             }
             Some(&c) => {
                 self.consume();
-                Some(re.character(c))
+                Some(statelist.character(c))
             }
             None => self.error(),
         }
