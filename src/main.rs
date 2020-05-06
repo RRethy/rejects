@@ -1,7 +1,7 @@
 mod parser;
 
 fn main() {
-    let res = parser::Parser::parse("abc");
+    let res = parser::Parser::parse("(abc|dabc)");
     if let Ok(regex) = res {
         println!("{:?}", regex);
         println!("{}", regex.find("abc"));

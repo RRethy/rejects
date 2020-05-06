@@ -74,8 +74,8 @@ impl State {
         State::NonTransition { chars, out: None }
     }
 
-    fn make_split(out1: usize) -> State {
-        State::Split { out1, out2: None }
+    fn make_split(out1: usize, out2: Option<usize>) -> State {
+        State::Split { out1, out2: out2 }
     }
 
     fn make_match() -> State {
@@ -115,8 +115,19 @@ impl StateList {
         StateList { states: Vec::new() }
     }
 
-    fn union(&mut self, f1: Option<Fragment>, _f2: Option<Fragment>) -> Option<Fragment> {
-        f1
+    fn union(&mut self, f1opt: Option<Fragment>, f2opt: Option<Fragment>) -> Option<Fragment> {
+        let mut f1 = f1opt?;
+        let f2 = match f2opt {
+            Some(f) => f,
+            None => return Some(f1),
+        };
+
+        let start = self.add_state(State::make_split(f1.start, Some(f2.start)));
+        f1.endstates.extend(f2.endstates);
+        Some(Fragment {
+            start,
+            endstates: f1.endstates,
+        })
     }
 
     fn concatenation(
