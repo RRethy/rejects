@@ -45,6 +45,16 @@ pub struct Fragment {
     endstates: Vec<usize>,
 }
 
+mod character_classes {
+    pub(super) fn letters() -> std::collections::HashSet<char> {
+        let mut set = std::collections::HashSet::new();
+        for c in b'a'..=b'z' {
+            set.insert(c as char);
+        }
+        set
+    }
+}
+
 #[allow(dead_code)]
 #[derive(Debug)]
 enum State {
@@ -469,7 +479,7 @@ impl<'a> Parser<'a> {
                     _ => return self.error(),
                 }
                 self.consume();
-                None // TODO return a fragment
+                Some(statelist.characters(character_classes::letters()))
             }
             Some('[') => {
                 // TODO unimplemented
@@ -549,4 +559,10 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn test_union() {}
+
+    #[test]
+    fn test_concatenation() {}
 }
