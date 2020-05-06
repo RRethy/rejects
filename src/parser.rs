@@ -179,17 +179,20 @@ impl StateList {
     }
 
     fn question_mark(&mut self, f: Fragment) -> Fragment {
-        f
+        let start = self.add_state(State::make_split(f.start, None));
+        let mut endstates = vec![start];
+        endstates.extend(f.endstates);
+        Fragment { start, endstates }
     }
 
     fn plus(&mut self, f: Fragment) -> Fragment {
-        let start = self.add_state(State::make_split(f.start, None));
+        let splitter = self.add_state(State::make_split(f.start, None));
         for &dangler in f.endstates.iter() {
-            self.link(dangler, start);
+            self.link(dangler, splitter);
         }
         Fragment {
             start: f.start,
-            endstates: vec![start],
+            endstates: vec![splitter],
         }
     }
 
