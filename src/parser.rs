@@ -168,7 +168,14 @@ impl StateList {
     }
 
     fn kleene(&mut self, f: Fragment) -> Fragment {
-        f
+        let start = self.add_state(State::make_split(f.start, None));
+        for &dangler in f.endstates.iter() {
+            self.link(dangler, start);
+        }
+        Fragment {
+            start,
+            endstates: vec![start],
+        }
     }
 
     fn question_mark(&mut self, f: Fragment) -> Fragment {
@@ -227,12 +234,12 @@ impl Regex {
     pub fn find(&self, s: &str) -> bool {
         let mut states = HashSet::new();
         states.insert(self.start);
-        self.delta(&mut states, self.start, None);
+        self.epsilon_transition(&mut states, self.start);
 
         for c in s.chars() {
             let mut newstates = HashSet::new();
             for &state in states.iter() {
-                self.delta(&mut newstates, state, Some(c));
+                self.character_transition(&mut newstates, state, c);
             }
             if newstates.len() == 0 {
                 return false;
@@ -249,35 +256,39 @@ impl Regex {
         })
     }
 
-    fn delta(&self, newstates: &mut HashSet<usize>, state: usize, symbol: Option<char>) {
+    fn character_transition(&self, newstates: &mut HashSet<usize>, state: usize, symbol: char) {
         match &self.statelist[state] {
-            State::Split { out1, out2 } => {
-                newstates.insert(*out1);
-                self.delta(newstates, *out1, symbol);
-                if let Some(out) = *out2 {
-                    newstates.insert(out);
-                    self.delta(newstates, out, symbol);
-                }
-            }
             State::Transition { chars, out } => {
-                if let Some(c) = symbol {
-                    if let Some(s) = out {
-                        if chars.contains(&c) {
-                            newstates.insert(*s);
-                        }
+                if let Some(s) = out {
+                    if chars.contains(&symbol) {
+                        newstates.insert(*s);
+                        self.epsilon_transition(newstates, *s);
                     }
                 }
             }
             State::NonTransition { chars, out } => {
-                if let Some(c) = symbol {
-                    if let Some(s) = out {
-                        if !chars.contains(&c) {
-                            newstates.insert(*s);
-                        }
+                if let Some(s) = out {
+                    if !chars.contains(&symbol) {
+                        newstates.insert(*s);
+                        self.epsilon_transition(newstates, *s);
                     }
                 }
             }
-            _ => {} // TODO Match and Nil
+            _ => {} // TODO Match and Nil and Split
+        }
+    }
+
+    fn epsilon_transition(&self, newstates: &mut HashSet<usize>, state: usize) {
+        match &self.statelist[state] {
+            State::Split { out1, out2 } => {
+                newstates.insert(*out1);
+                self.epsilon_transition(newstates, *out1);
+                if let Some(out) = *out2 {
+                    newstates.insert(out);
+                    self.epsilon_transition(newstates, out);
+                }
+            }
+            _ => {} // TODO Match and Nil and Transition and NonTransition
         }
     }
 }
