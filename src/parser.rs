@@ -46,11 +46,31 @@ pub struct Fragment {
 }
 
 mod character_classes {
-    pub(super) fn letters() -> std::collections::HashSet<char> {
-        let mut set = std::collections::HashSet::new();
+    use std::collections::HashSet;
+
+    pub(super) fn letters() -> HashSet<char> {
+        let mut set = HashSet::new();
         for c in b'a'..=b'z' {
             set.insert(c as char);
         }
+        for c in b'A'..=b'Z' {
+            set.insert(c as char);
+        }
+        set
+    }
+
+    pub(super) fn digits() -> HashSet<char> {
+        let mut set = HashSet::new();
+        for c in b'0'..=b'9' {
+            set.insert(c as char);
+        }
+        set
+    }
+
+    pub(super) fn whitespace() -> HashSet<char> {
+        let mut set = HashSet::new();
+        set.insert(' ');
+        set.insert('\t');
         set
     }
 }
@@ -220,6 +240,14 @@ impl StateList {
         }
     }
 
+    fn non_characters(&mut self, chars: HashSet<char>) -> Fragment {
+        let state = self.add_state(State::make_nontransition(chars));
+        Fragment {
+            start: state,
+            endstates: vec![state],
+        }
+    }
+
     fn add_state(&mut self, state: State) -> usize {
         self.states.push(state);
         self.states.len() - 1
@@ -330,7 +358,7 @@ impl<'a> Parser<'a> {
             }
             // ensure we are at the end of the string
             if let Some(_) = parser.iter.next() {
-                parser.error();
+                parser.error_next();
             }
             if parser.errors.len() > 0 {
                 return Err(parser.errors);
@@ -339,7 +367,7 @@ impl<'a> Parser<'a> {
         }
         // ensure we are at the end of the string
         if let Some(_) = parser.iter.next() {
-            parser.error();
+            parser.error_next();
         }
         if parser.errors.len() > 0 {
             return Err(parser.errors);
@@ -362,13 +390,19 @@ impl<'a> Parser<'a> {
                 let r = self.parse_union_prime(statelist);
                 statelist.union(l, r)
             }
-            Some(')') | Some('*') | Some('?') | Some('+') | Some('|') => self.error(),
+            Some(')') | Some('*') | Some('?') | Some('+') | Some('|') => {
+                self.error_next();
+                None
+            }
             Some(_) => {
                 let l = self.parse_concat(statelist);
                 let r = self.parse_union_prime(statelist);
                 statelist.union(l, r)
             }
-            None => self.error(),
+            None => {
+                self.error_next();
+                None
+            }
         }
     }
 
@@ -379,7 +413,10 @@ impl<'a> Parser<'a> {
                 self.consume();
                 self.parse_union(statelist)
             }
-            Some(_) => self.error(),
+            Some(_) => {
+                self.error_next();
+                None
+            }
             None => None,
         }
     }
@@ -391,13 +428,19 @@ impl<'a> Parser<'a> {
                 let r = self.parse_concat_prime(statelist);
                 statelist.concatenation(l, r)
             }
-            Some(')') | Some('*') | Some('?') | Some('+') | Some('|') => self.error(),
+            Some(')') | Some('*') | Some('?') | Some('+') | Some('|') => {
+                self.error_next();
+                None
+            }
             Some(_) => {
                 let l = self.parse_unary(statelist);
                 let r = self.parse_concat_prime(statelist);
                 statelist.concatenation(l, r)
             }
-            None => self.error(),
+            None => {
+                self.error_next();
+                None
+            }
         }
     }
 
@@ -405,7 +448,10 @@ impl<'a> Parser<'a> {
         match self.iter.peek() {
             Some('(') => self.parse_concat(statelist),
             Some(')') => None,
-            Some('*') | Some('?') | Some('+') => self.error(),
+            Some('*') | Some('?') | Some('+') => {
+                self.error_next();
+                None
+            }
             Some('|') => None,
             Some(_) => self.parse_concat(statelist),
             None => None,
@@ -419,13 +465,19 @@ impl<'a> Parser<'a> {
                 let r = self.parse_unaryop();
                 statelist.unary_operator(l, r)
             }
-            Some(')') | Some('*') | Some('?') | Some('+') | Some('|') => self.error(),
+            Some(')') | Some('*') | Some('?') | Some('+') | Some('|') => {
+                self.error_next();
+                None
+            }
             Some(_) => {
                 let l = self.parse_paren(statelist);
                 let r = self.parse_unaryop();
                 statelist.unary_operator(l, r)
             }
-            None => self.error(),
+            None => {
+                self.error_next();
+                None
+            }
         }
     }
 
@@ -449,37 +501,47 @@ impl<'a> Parser<'a> {
                     self.consume();
                     fragment
                 } else {
-                    self.error()
+                    self.error_next();
+                    None
                 }
             }
-            Some(')') | Some('*') | Some('?') | Some('+') | Some('|') | None => self.error(),
+            Some(')') | Some('*') | Some('?') | Some('+') | Some('|') | None => {
+                self.error_next();
+                None
+            }
             Some(_) => self.parse_term(statelist),
         }
     }
 
     fn parse_term(&mut self, statelist: &mut StateList) -> Option<Fragment> {
         match self.iter.peek() {
-            Some('(') | Some(')') | Some('*') | Some('?') | Some('+') | Some('|') => self.error(),
+            Some('(') | Some(')') | Some('*') | Some('?') | Some('+') | Some('|') => {
+                self.error_next();
+                None
+            }
             Some('\\') => {
                 self.consume();
                 // TODO
-                match self.iter.peek() {
-                    Some('w') => {}
-                    Some('W') => {}
-                    Some('d') => {}
-                    Some('D') => {}
-                    Some('s') => {}
-                    Some('S') => {}
-                    Some('*') => {}
-                    Some('+') => {}
-                    Some('\\') => {}
-                    Some('(') => {}
-                    Some(')') => {}
-                    Some('.') => {}
-                    _ => return self.error(),
+                match self.iter.next() {
+                    Some('w') => Some(statelist.characters(character_classes::letters())),
+                    Some('W') => Some(statelist.non_characters(character_classes::letters())),
+                    Some('d') => Some(statelist.characters(character_classes::digits())),
+                    Some('D') => Some(statelist.non_characters(character_classes::digits())),
+                    Some('s') => Some(statelist.characters(character_classes::whitespace())),
+                    Some('S') => Some(statelist.non_characters(character_classes::whitespace())),
+                    Some('*') => Some(statelist.character('*')),
+                    Some('+') => Some(statelist.character('+')),
+                    Some('\\') => Some(statelist.character('\\')),
+                    Some('(') => Some(statelist.character('(')),
+                    Some(')') => Some(statelist.character(')')),
+                    Some('.') => Some(statelist.character('.')),
+                    _ => {
+                        self.error_cur();
+                        None
+                    }
                 }
-                self.consume();
-                Some(statelist.characters(character_classes::letters()))
+                // self.consume();
+                // Some(statelist.characters(character_classes::letters()))
             }
             Some('[') => {
                 // TODO unimplemented
@@ -489,7 +551,10 @@ impl<'a> Parser<'a> {
                 self.consume();
                 Some(statelist.character(c))
             }
-            None => self.error(),
+            None => {
+                self.error_next();
+                None
+            }
         }
     }
 
@@ -498,11 +563,14 @@ impl<'a> Parser<'a> {
         self.iter.next()
     }
 
-    // TODO allow an optional error message be passed for better error reporting
-    fn error(&mut self) -> Option<Fragment> {
+    // TODO allow an optional error_next message be passed for better error_next reporting
+    fn error_next(&mut self) {
         self.errors.push(self.index);
         self.iter.next();
-        None
+    }
+
+    fn error_cur(&mut self) {
+        self.errors.push(self.index);
     }
 }
 
