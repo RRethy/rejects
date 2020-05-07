@@ -73,6 +73,17 @@ mod character_classes {
         set.insert('\t');
         set
     }
+
+    pub(super) fn range(low: u8, high: u8) -> Result<HashSet<char>, (u8, u8)> {
+        if high < low {
+            return Err((low, high));
+        }
+        let mut set = HashSet::new();
+        for c in low..high {
+            set.insert(c as char);
+        }
+        Ok(set)
+    }
 }
 
 #[allow(dead_code)]
@@ -93,6 +104,17 @@ enum State {
 
 #[allow(dead_code)]
 impl State {
+    fn make_inclusive_exclusive_transition(
+        inclusive: HashSet<char>,
+        exclusive: HashSet<char>,
+    ) -> State {
+        State::Transition {
+            inclusive,
+            exclusive,
+            out: None,
+        }
+    }
+
     fn make_inclusive_transition(chars: HashSet<char>) -> State {
         State::Transition {
             inclusive: chars,
@@ -254,6 +276,20 @@ impl StateList {
         self.characters(set)
     }
 
+    fn inclusive_exclusive_characters(
+        &mut self,
+        inclusive: HashSet<char>,
+        exclusive: HashSet<char>,
+    ) -> Fragment {
+        let state = self.add_state(State::make_inclusive_exclusive_transition(
+            inclusive, exclusive,
+        ));
+        Fragment {
+            start: state,
+            endstates: vec![state],
+        }
+    }
+
     fn characters(&mut self, chars: HashSet<char>) -> Fragment {
         let state = self.add_state(State::make_inclusive_transition(chars));
         Fragment {
@@ -342,7 +378,7 @@ impl Regex {
                     self.epsilon_transition(newstates, out);
                 }
             }
-            _ => {} // TODO Match and Nil and InclusiveTransition and ExclusiveTransition
+            _ => {} // Match and Nil and InclusiveTransition and ExclusiveTransition don't have epsilon transitions
         }
     }
 }
@@ -526,7 +562,7 @@ impl<'a> Parser<'a> {
                 self.error_next();
                 None
             }
-            Some('.') => Some(statelist.characters(HashSet::new())), // this is how I denate any character
+            Some('.') => Some(statelist.characters(HashSet::new())),
             Some('\\') => {
                 self.consume();
                 match self.iter.next() {
@@ -552,7 +588,8 @@ impl<'a> Parser<'a> {
             }
             Some('[') => {
                 let mut negate = false;
-                let mut chars = HashSet::new();
+                let mut inclusive = HashSet::new();
+                let mut exclusive = HashSet::new();
                 if let Some('^') = self.iter.peek() {
                     self.iter.next();
                     negate = true;
@@ -562,15 +599,49 @@ impl<'a> Parser<'a> {
                     match self.iter.next() {
                         Some(']') => break,
                         Some('\\') => match self.iter.next() {
-                            Some(']') => chars.insert(']'),
-                            Some('\\') => chars.insert('\\'),
+                            Some(']') => {
+                                inclusive.insert(']');
+                            }
+                            Some('\\') => {
+                                inclusive.insert('\\');
+                            }
+                            Some('w') => inclusive.extend(character_classes::letters()),
+                            Some('W') => exclusive.extend(character_classes::letters()),
+                            Some('d') => inclusive.extend(character_classes::digits()),
+                            Some('D') => exclusive.extend(character_classes::digits()),
+                            Some('s') => inclusive.extend(character_classes::whitespace()),
+                            Some('S') => exclusive.extend(character_classes::whitespace()),
                             _ => {
                                 self.error_cur();
                                 return None;
                             }
                         },
-                        Some(c) => chars.insert(c),
-                        // TODO handle escapes codes
+                        Some(c) if c.is_ascii() => {
+                            if let Some('-') = self.iter.peek() {
+                                self.iter.next();
+                                match self.iter.next() {
+                                    Some(high) if c.is_ascii() => {
+                                        if let Ok(set) =
+                                            character_classes::range(c as u8, high as u8)
+                                        {
+                                            inclusive.extend(set);
+                                        } else {
+                                            self.error_cur();
+                                            return None;
+                                        }
+                                    }
+                                    _ => {
+                                        self.error_cur();
+                                        return None;
+                                    }
+                                }
+                            } else {
+                                inclusive.insert(c);
+                            }
+                        }
+                        Some(c) => {
+                            inclusive.insert(c);
+                        }
                         None => {
                             self.error_cur();
                             return None;
@@ -579,9 +650,9 @@ impl<'a> Parser<'a> {
                 }
 
                 if negate {
-                    Some(statelist.non_characters(chars))
+                    Some(statelist.inclusive_exclusive_characters(exclusive, inclusive))
                 } else {
-                    Some(statelist.characters(chars))
+                    Some(statelist.inclusive_exclusive_characters(inclusive, exclusive))
                 }
             }
             Some(&c) => {
