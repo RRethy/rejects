@@ -145,6 +145,7 @@ impl State {
             } => {
                 if (inclusive.len() > 0 && inclusive.contains(&c))
                     || (exclusive.len() > 0 && !exclusive.contains(&c))
+                    || (inclusive.len() == 0 && exclusive.len() == 0)
                 {
                     *out
                 } else {
@@ -525,6 +526,7 @@ impl<'a> Parser<'a> {
                 self.error_next();
                 None
             }
+            Some('.') => Some(statelist.characters(HashSet::new())), // this is how I denate any character
             Some('\\') => {
                 self.consume();
                 match self.iter.next() {
