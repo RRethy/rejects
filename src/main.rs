@@ -1,7 +1,7 @@
-mod parser;
+extern crate rejects;
 
 fn main() {
-    let res = parser::Parser::parse(r"\w\w\w\d\d\d\W\W");
+    let res = rejects::compile(r"\w\w\w\d\d\d\W\W");
     // let res = parser::Parser::parse("(a|b)*(http:|https:)//www google com+");
     if let Ok(regex) = res {
         println!("{:?}", regex);
