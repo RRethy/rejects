@@ -521,7 +521,6 @@ impl<'a> Parser<'a> {
             }
             Some('\\') => {
                 self.consume();
-                // TODO
                 match self.iter.next() {
                     Some('w') => Some(statelist.characters(character_classes::letters())),
                     Some('W') => Some(statelist.non_characters(character_classes::letters())),
@@ -544,8 +543,30 @@ impl<'a> Parser<'a> {
                 // Some(statelist.characters(character_classes::letters()))
             }
             Some('[') => {
-                // TODO unimplemented
-                None
+                let mut negate = false;
+                let mut chars = HashSet::new();
+                if let Some('^') = self.iter.peek() {
+                    self.iter.next();
+                    negate = true;
+                }
+
+                loop {
+                    match self.iter.next() {
+                        Some(']') => break,
+                        Some(c) => chars.insert(c),
+                        // TODO handle escapes codes
+                        None => {
+                            self.error_cur();
+                            return None;
+                        }
+                    };
+                }
+
+                if negate {
+                    Some(statelist.non_characters(chars))
+                } else {
+                    Some(statelist.characters(chars))
+                }
             }
             Some(&c) => {
                 self.consume();

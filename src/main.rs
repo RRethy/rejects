@@ -1,10 +1,17 @@
 mod parser;
 
 fn main() {
-    let res = parser::Parser::parse(r"\w\w\w\d\d\d\s\s");
+    let res = parser::Parser::parse(r"[123abc]");
     // let res = parser::Parser::parse("(a|b)*(http:|https:)//www google com+");
     if let Ok(regex) = res {
         println!("{:?}", regex);
+        println!("{}", regex.find("1"));
+        println!("{}", regex.find("2"));
+        println!("{}", regex.find("3"));
+        println!("{}", regex.find("a"));
+        println!("{}", regex.find("b"));
+        println!("{}", regex.find("c"));
+        println!("{}", regex.find("d"));
         println!("{}", regex.find("abc123 	"));
         println!("{}", regex.find("ABc123 	"));
         println!("{}", regex.find("Ac1234 	"));
