@@ -79,11 +79,8 @@ mod character_classes {
 #[derive(Debug)]
 enum State {
     Transition {
-        chars: HashSet<char>,
-        out: Option<usize>,
-    },
-    NonTransition {
-        chars: HashSet<char>,
+        inclusive: HashSet<char>,
+        exclusive: HashSet<char>,
         out: Option<usize>,
     },
     Split {
@@ -96,12 +93,20 @@ enum State {
 
 #[allow(dead_code)]
 impl State {
-    fn make_transition(chars: HashSet<char>) -> State {
-        State::Transition { chars, out: None }
+    fn make_inclusive_transition(chars: HashSet<char>) -> State {
+        State::Transition {
+            inclusive: chars,
+            exclusive: HashSet::new(),
+            out: None,
+        }
     }
 
-    fn make_nontransition(chars: HashSet<char>) -> State {
-        State::NonTransition { chars, out: None }
+    fn make_exclusive_transition(chars: HashSet<char>) -> State {
+        State::Transition {
+            inclusive: HashSet::new(),
+            exclusive: chars,
+            out: None,
+        }
     }
 
     fn make_split(out1: usize, out2: Option<usize>) -> State {
@@ -119,11 +124,8 @@ impl State {
     fn set_out(&mut self, newout: usize) {
         match self {
             State::Transition {
-                chars: _,
-                ref mut out,
-            } => *out = Some(newout),
-            State::NonTransition {
-                chars: _,
+                inclusive: _,
+                exclusive: _,
                 ref mut out,
             } => *out = Some(newout),
             State::Split {
@@ -131,6 +133,25 @@ impl State {
                 ref mut out2,
             } => *out2 = Some(newout),
             _ => {} // State::Match and State::Nil but this shouldn't be reached
+        }
+    }
+
+    fn transition(&self, c: char) -> Option<usize> {
+        match self {
+            State::Transition {
+                inclusive,
+                exclusive,
+                ref out,
+            } => {
+                if (inclusive.len() > 0 && inclusive.contains(&c))
+                    || (exclusive.len() > 0 && !exclusive.contains(&c))
+                {
+                    *out
+                } else {
+                    None
+                }
+            }
+            _ => None,
         }
     }
 }
@@ -233,7 +254,7 @@ impl StateList {
     }
 
     fn characters(&mut self, chars: HashSet<char>) -> Fragment {
-        let state = self.add_state(State::make_transition(chars));
+        let state = self.add_state(State::make_inclusive_transition(chars));
         Fragment {
             start: state,
             endstates: vec![state],
@@ -241,7 +262,7 @@ impl StateList {
     }
 
     fn non_characters(&mut self, chars: HashSet<char>) -> Fragment {
-        let state = self.add_state(State::make_nontransition(chars));
+        let state = self.add_state(State::make_exclusive_transition(chars));
         Fragment {
             start: state,
             endstates: vec![state],
@@ -304,24 +325,9 @@ impl Regex {
     }
 
     fn character_transition(&self, newstates: &mut HashSet<usize>, state: usize, symbol: char) {
-        match &self.statelist[state] {
-            State::Transition { chars, out } => {
-                if let Some(s) = out {
-                    if chars.contains(&symbol) {
-                        newstates.insert(*s);
-                        self.epsilon_transition(newstates, *s);
-                    }
-                }
-            }
-            State::NonTransition { chars, out } => {
-                if let Some(s) = out {
-                    if !chars.contains(&symbol) {
-                        newstates.insert(*s);
-                        self.epsilon_transition(newstates, *s);
-                    }
-                }
-            }
-            _ => {} // TODO Match and Nil and Split
+        if let Some(out) = &self.statelist[state].transition(symbol) {
+            newstates.insert(*out);
+            self.epsilon_transition(newstates, *out);
         }
     }
 
@@ -335,7 +341,7 @@ impl Regex {
                     self.epsilon_transition(newstates, out);
                 }
             }
-            _ => {} // TODO Match and Nil and Transition and NonTransition
+            _ => {} // TODO Match and Nil and InclusiveTransition and ExclusiveTransition
         }
     }
 }
@@ -553,6 +559,14 @@ impl<'a> Parser<'a> {
                 loop {
                     match self.iter.next() {
                         Some(']') => break,
+                        Some('\\') => match self.iter.next() {
+                            Some(']') => chars.insert(']'),
+                            Some('\\') => chars.insert('\\'),
+                            _ => {
+                                self.error_cur();
+                                return None;
+                            }
+                        },
                         Some(c) => chars.insert(c),
                         // TODO handle escapes codes
                         None => {
