@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-pub(crate) fn letters() -> HashSet<char> {
+pub(crate) fn word_chars() -> HashSet<char> {
     let mut set = HashSet::new();
     for c in b'a'..=b'z' {
         set.insert(c as char);
@@ -8,6 +8,10 @@ pub(crate) fn letters() -> HashSet<char> {
     for c in b'A'..=b'Z' {
         set.insert(c as char);
     }
+    for c in b'0'..=b'9' {
+        set.insert(c as char);
+    }
+    set.insert('_');
     set
 }
 

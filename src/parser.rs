@@ -188,8 +188,8 @@ impl<'a> Parser<'a> {
             Some('\\') => {
                 self.consume();
                 match self.iter.next() {
-                    Some('w') => Some(statelist.characters(character_sets::letters())),
-                    Some('W') => Some(statelist.non_characters(character_sets::letters())),
+                    Some('w') => Some(statelist.characters(character_sets::word_chars())),
+                    Some('W') => Some(statelist.non_characters(character_sets::word_chars())),
                     Some('d') => Some(statelist.characters(character_sets::digits())),
                     Some('D') => Some(statelist.non_characters(character_sets::digits())),
                     Some('s') => Some(statelist.characters(character_sets::whitespace())),
@@ -205,8 +205,6 @@ impl<'a> Parser<'a> {
                         None
                     }
                 }
-                // self.consume();
-                // Some(statelist.characters(character_sets::letters()))
             }
             Some('[') => {
                 let mut negate = false;
@@ -227,8 +225,8 @@ impl<'a> Parser<'a> {
                             Some('\\') => {
                                 inclusive.insert('\\');
                             }
-                            Some('w') => inclusive.extend(character_sets::letters()),
-                            Some('W') => exclusive.extend(character_sets::letters()),
+                            Some('w') => inclusive.extend(character_sets::word_chars()),
+                            Some('W') => exclusive.extend(character_sets::word_chars()),
                             Some('d') => inclusive.extend(character_sets::digits()),
                             Some('D') => exclusive.extend(character_sets::digits()),
                             Some('s') => inclusive.extend(character_sets::whitespace()),
