@@ -1,11 +1,7 @@
 mod character_sets;
 mod nfa;
 mod parser;
-mod rejects;
-
-pub fn compile(s: &str) -> Result<rejects::Rejects, Vec<u32>> {
-    parser::parse(s)
-}
+pub mod rejects;
 
 /// LL(1) CFG for the supported regular expression syntax.
 /// https://smlweb.cpsc.ucalgary.ca/vital-stats.php?grammar=UNION+++++-%3E+CONCAT%0D%0A+++++++++++%7C+UNION+cup+CONCAT.%0D%0ACONCAT++++-%3E+UNARY%0D%0A+++++++++++%7C+CONCAT+dot+UNARY.%0D%0AUNARY+++++-%3E+PARegexN+UNARYOP.%0D%0AUNARYOP+++-%3E+*%0D%0A+++++++++++%7C+%3F%0D%0A+++++++++++%7C+%2B%0D%0A+++++++++++%7C.%0D%0APARegexN+++++-%3E+TERM%0D%0A+++++++++++%7C+%28+UNION+%29.%0D%0ATERM++++++-%3E+terminal.%0D%0A

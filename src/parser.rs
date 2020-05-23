@@ -1,9 +1,10 @@
 use crate::character_sets;
 use crate::nfa::{Fragment, State, StateList};
-use crate::rejects::Rejects;
 use std::collections::HashSet;
 use std::iter::Peekable;
 use std::str::Chars;
+
+type ParserResult = Result<(usize, StateList), Vec<u32>>;
 
 #[allow(dead_code)]
 pub struct Parser<'a> {
@@ -12,14 +13,10 @@ pub struct Parser<'a> {
     errors: Vec<u32>,
 }
 
-pub fn parse(s: &str) -> Result<Rejects, Vec<u32>> {
+pub(crate) fn parse(s: &str) -> ParserResult {
     let mut parser = Parser::new(s);
     let mut statelist = StateList::new();
     if let Some(frag) = parser.parse_union(&mut statelist) {
-        let match_state = statelist.add_state(State::make_match());
-        for &dangler in frag.endstates.iter() {
-            statelist.link(dangler, match_state);
-        }
         // ensure we are at the end of the string
         if let Some(_) = parser.iter.next() {
             parser.error_next();
@@ -27,16 +24,15 @@ pub fn parse(s: &str) -> Result<Rejects, Vec<u32>> {
         if parser.errors.len() > 0 {
             return Err(parser.errors);
         }
-        return Ok(Rejects::new(frag.start, statelist.states));
+
+        let match_state = statelist.add_state(State::make_match());
+        for &dangler in frag.endstates.iter() {
+            statelist.link(dangler, match_state);
+        }
+        Ok((frag.start, statelist))
+    } else {
+        Err(parser.errors)
     }
-    // ensure we are at the end of the string
-    if let Some(_) = parser.iter.next() {
-        parser.error_next();
-    }
-    if parser.errors.len() > 0 {
-        return Err(parser.errors);
-    }
-    Err(Vec::new())
 }
 
 impl<'a> Parser<'a> {

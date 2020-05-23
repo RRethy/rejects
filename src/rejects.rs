@@ -1,4 +1,5 @@
 use crate::nfa::State;
+use crate::parser;
 use std::collections::HashSet;
 
 #[derive(Debug)]
@@ -9,13 +10,15 @@ pub struct Rejects {
 
 #[allow(dead_code)]
 impl Rejects {
-    pub fn _new2(pat: &str) {}
-
-    pub(crate) fn new(start: usize, statelist: Vec<State>) -> Rejects {
-        Rejects { start, statelist }
+    pub fn new(pat: &str) -> Result<Rejects, Vec<u32>> {
+        let (start, statelist) = parser::parse(pat)?;
+        Ok(Rejects {
+            start,
+            statelist: statelist.states,
+        })
     }
 
-    pub fn find(&self, s: &str) -> bool {
+    pub fn is_match(&self, s: &str) -> bool {
         let mut states = HashSet::new();
         states.insert(self.start);
         self.epsilon_transition(&mut states, self.start);
@@ -57,7 +60,7 @@ impl Rejects {
                     self.epsilon_transition(newstates, out);
                 }
             }
-            _ => {} // Match and Nil and InclusiveTransition and ExclusiveTransition don't have epsilon transitions
+            _ => {} // Match and Nil and Transition don't have epsilon transitions
         }
     }
 }
