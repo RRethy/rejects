@@ -3,6 +3,23 @@ mod nfa;
 mod parser;
 pub mod rejects;
 
+/// Rejects is an implementation of regular expressions that implements the following:
+///     '*': Zero or more on the preceding (based on operator precedence) regular expression.
+///     '+': One or more on the preceding (based on operator precedence) regular expression.
+///     '?': Zero or One on the preceding (based on operator precedence) regular expression.
+///     '|': For union of multiple regular expressions.
+///     '()': For precedence only, referring to capture groups with \1 is not yet supported.
+///     '[]': For union of various characters, character ranges over ascii characters (e.g. a-z, 0-9, A-Z),
+///           character sets ('\w', '\W', '\d', '\D', '\s', '\S'), '\' is supported by escaping it ('\\').
+///           The entire block can be negated using '^' at the start (e.g. [^a-z] to match anything
+///           except [a-z]).
+///     '.': Any character.
+///     '\': Denotes the following character to be special. Special characters are members of the
+///          set {'w', 'W', 'd', 'D', 's', 'S', '*', '+', '\', '(', ')', '.'}. They work as
+///          expected based on PCRE2.
+///
+/// The grammar is explained in parser.rs.
+
 /// LL(1) CFG for the supported regular expression syntax.
 /// https://smlweb.cpsc.ucalgary.ca/vital-stats.php?grammar=UNION+++++-%3E+CONCAT%0D%0A+++++++++++%7C+UNION+cup+CONCAT.%0D%0ACONCAT++++-%3E+UNARY%0D%0A+++++++++++%7C+CONCAT+dot+UNARY.%0D%0AUNARY+++++-%3E+PARegexN+UNARYOP.%0D%0AUNARYOP+++-%3E+*%0D%0A+++++++++++%7C+%3F%0D%0A+++++++++++%7C+%2B%0D%0A+++++++++++%7C.%0D%0APARegexN+++++-%3E+TERM%0D%0A+++++++++++%7C+%28+UNION+%29.%0D%0ATERM++++++-%3E+terminal.%0D%0A
 /// grammar before left-recursion is removed (we don't include $ in the grammar because it's just a

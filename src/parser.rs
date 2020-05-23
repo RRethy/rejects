@@ -4,6 +4,69 @@ use std::collections::HashSet;
 use std::iter::Peekable;
 use std::str::Chars;
 
+/// This is an LL(1) parser.
+///
+/// The following grammar is the grammar for the supported syntax, it is not LL(1).
+///
+/// BNF:
+///
+///     <union>   ::= <concat>
+///                  | <union> "|" <concat>
+///     <concat>  ::= <unary>
+///                  | <concat> "." <unary>
+///     <unary>   ::= <paren> <unaryop>
+///     <unaryop> ::= "*"
+///                  | "+"
+///                  | "?"
+///                  | ""
+///     <paren>   ::= <term>
+///                  | "(" union ")"
+///
+///     <term> is any utf-8 encoded character.
+/*
+Grammar used in https://smlweb.cpsc.ucalgary.ca:
+    UNION     -> CONCAT
+                | UNION cup CONCAT.
+    CONCAT    -> UNARY
+                | CONCAT dot UNARY.
+    UNARY     -> PAREN UNARYOP.
+    UNARYOP   -> *
+                | ?
+                | +
+                |.
+    PAREN     -> TERM
+                | ( UNION ).
+    TERM      -> terminal.
+*/
+/// The above grammar is the master grammar that is then transformed using
+/// https://smlweb.cpsc.ucalgary.ca into an LL(1) by removing the left-recursion. This is done
+/// since it's easier to read the above grammar than the below grammar IMHO.
+/// The following is the LL(1) grammar.
+///
+/// BNF:
+///     <union>   ::= <concat> <union'>
+///     <union'>  ::= "|" <concat> <union1>
+///                  | ""
+///     <concat>  ::= <unary> <concat'>
+///     <concat'> ::= "." <unary> <concat'>
+///                  | ""
+///     <unary>   ::= <paren> <unaryop>
+///     <unaryop> ::= "*"
+///                  | "+"
+///                  | "?"
+///                  | ""
+///     <paren>   ::= <term>
+///                  | "(" union ")"
+///
+///     <term> is any utf-8 encoded character.
+///
+/// Note: All uses of "." do not actually occur in the pattern, concatenation is inferred based on
+/// usage. The code below infers a "." anywhere Parser::parse_concat is used. This is typically
+/// when we peek and see either "(" or a <term>.
+///
+/// The parser also has additional logic to parse the inside of "[]" and any character classes.
+/// The parser will return a NFA that can be used to find matches in a text.
+
 type ParserResult = Result<(usize, StateList), Vec<u32>>;
 
 #[allow(dead_code)]
