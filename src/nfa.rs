@@ -147,7 +147,7 @@ impl ToTokens for State {
                     }),
                 }
                 wrapper_stream.append_all(quote! {
-                    let state = State::make_transition(inclusive, exclusive, out);
+                    let state = rejects::nfa::State::make_transition(inclusive, exclusive, out);
                 });
             }
             State::Split { out1, out2 } => {
@@ -160,17 +160,17 @@ impl ToTokens for State {
                     }),
                 }
                 wrapper_stream.append_all(quote! {
-                    let state = State::make_split(#out1, out2);
+                    let state = rejects::nfa::State::make_split(#out1, out2);
                 });
             }
             State::Match => {
                 wrapper_stream.append_all(quote! {
-                    let state = State::make_match();
+                    let state = rejects::nfa::State::make_match();
                 });
             }
             State::Nil => {
                 wrapper_stream.append_all(quote! {
-                    let state = State::make_nil();
+                    let state = rejects::nfa::State::make_nil();
                 });
             }
         }
