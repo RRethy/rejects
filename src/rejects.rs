@@ -15,8 +15,7 @@ impl ToTokens for Rejects {
         let start = self.start;
         let mut wrapper_stream = proc_macro2::TokenStream::new();
         wrapper_stream.append_all(quote! {
-            use rejects::builder::Builder;
-            let mut builder = Builder.new(#start);
+            let mut builder = rejects::builder::Builder::new(#start);
         });
         for state in self.statelist.iter() {
             wrapper_stream.append_all(quote! {
