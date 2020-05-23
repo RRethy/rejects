@@ -26,7 +26,7 @@ impl ToTokens for Rejects {
         tokens.append_all(quote! {
             {
                 #wrapper_stream
-                builder
+                builder.build()
             }
         });
     }
