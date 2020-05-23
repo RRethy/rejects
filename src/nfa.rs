@@ -1,3 +1,5 @@
+use quote::quote;
+use quote::{ToTokens, TokenStreamExt};
 use std::collections::HashSet;
 use std::ops::Index;
 
@@ -10,7 +12,7 @@ pub(crate) struct Fragment {
 
 #[allow(dead_code)]
 #[derive(Debug)]
-pub(crate) enum State {
+pub enum State {
     Transition {
         inclusive: HashSet<char>,
         exclusive: HashSet<char>,
@@ -26,6 +28,30 @@ pub(crate) enum State {
 
 #[allow(dead_code)]
 impl State {
+    pub fn make_transition(
+        inclusive: HashSet<char>,
+        exclusive: HashSet<char>,
+        out: Option<usize>,
+    ) -> State {
+        let mut tran = State::make_inclusive_exclusive_transition(inclusive, exclusive);
+        if let Some(c) = out {
+            tran.set_out(c);
+        }
+        tran
+    }
+
+    pub fn make_split(out1: usize, out2: Option<usize>) -> State {
+        State::Split { out1, out2 }
+    }
+
+    pub fn make_match() -> State {
+        State::Match
+    }
+
+    pub fn make_nil() -> State {
+        State::Nil
+    }
+
     pub(crate) fn make_inclusive_exclusive_transition(
         inclusive: HashSet<char>,
         exclusive: HashSet<char>,
@@ -51,18 +77,6 @@ impl State {
             exclusive: chars,
             out: None,
         }
-    }
-
-    pub(crate) fn make_split(out1: usize, out2: Option<usize>) -> State {
-        State::Split { out1, out2: out2 }
-    }
-
-    pub(crate) fn make_match() -> State {
-        State::Match
-    }
-
-    pub(crate) fn make_nil() -> State {
-        State::Nil
     }
 
     pub(crate) fn set_out(&mut self, newout: usize) {
@@ -98,6 +112,74 @@ impl State {
             }
             _ => None,
         }
+    }
+}
+
+impl ToTokens for State {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let mut wrapper_stream = proc_macro2::TokenStream::new();
+        match self {
+            State::Transition {
+                inclusive,
+                exclusive,
+                out,
+            } => {
+                wrapper_stream.append_all(quote! {
+                    let mut inclusive = std::collections::HashSet::new();
+                    let mut exclusive = std::collections::HashSet::new();
+                });
+                for c in inclusive {
+                    wrapper_stream.append_all(quote! {
+                        inclusive.insert(#c);
+                    });
+                }
+                for c in exclusive {
+                    wrapper_stream.append_all(quote! {
+                        exclusive.insert(#c);
+                    });
+                }
+                match out {
+                    Some(n) => wrapper_stream.append_all(quote! {
+                        let out = Some(#n);
+                    }),
+                    None => wrapper_stream.append_all(quote! {
+                        let out: Option<usize> = None;
+                    }),
+                }
+                wrapper_stream.append_all(quote! {
+                    let state = State::make_transition(inclusive, exclusive, out);
+                });
+            }
+            State::Split { out1, out2 } => {
+                match out2 {
+                    Some(n) => wrapper_stream.append_all(quote! {
+                        let out2 = Some(#n);
+                    }),
+                    None => wrapper_stream.append_all(quote! {
+                        let out2: Option<usize> = None;
+                    }),
+                }
+                wrapper_stream.append_all(quote! {
+                    let state = State::make_split(#out1, out2);
+                });
+            }
+            State::Match => {
+                wrapper_stream.append_all(quote! {
+                    let state = State::make_match();
+                });
+            }
+            State::Nil => {
+                wrapper_stream.append_all(quote! {
+                    let state = State::make_nil();
+                });
+            }
+        }
+        tokens.append_all(quote! {
+            {
+                #wrapper_stream
+                state
+            }
+        });
     }
 }
 

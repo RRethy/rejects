@@ -67,7 +67,7 @@ Grammar used in https://smlweb.cpsc.ucalgary.ca:
 /// The parser also has additional logic to parse the inside of "[]" and any character classes.
 /// The parser will return a NFA that can be used to find matches in a text.
 
-type ParserResult = Result<(usize, StateList), Vec<u32>>;
+type ParserResult = Result<(usize, Vec<State>), Vec<u32>>;
 
 #[allow(dead_code)]
 pub struct Parser<'a> {
@@ -92,7 +92,7 @@ pub(crate) fn parse(s: &str) -> ParserResult {
         for &dangler in frag.endstates.iter() {
             statelist.link(dangler, match_state);
         }
-        Ok((frag.start, statelist))
+        Ok((frag.start, statelist.states))
     } else {
         Err(parser.errors)
     }
