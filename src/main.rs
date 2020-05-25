@@ -1,6 +1,8 @@
 fn main() {
-    let re = rejects::make_rejects!(r"(\d\d\d\d)-(\d\d)-(\d\d)");
+    let re = rejects::make_rejects!(r"((\d\d\d\d)-(\d\d)-(\d\d))+");
     println!("{}", re.find_end("2010-03-14"));
+    println!("{}", re.find_end("2010-03-142010-03-142010-03-142010-03-142010-03-142010-03-142010-03-14aaaa"));
+    println!("{}", re.find_end("2010-03-142010-03-14"));
     println!("{}", re.find_end("2010-03-14 ss"));
     println!("{}", re.find_end("Ac1234 	"));
     println!("{}", re.find_end("1"));
