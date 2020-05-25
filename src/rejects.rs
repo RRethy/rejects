@@ -1,4 +1,4 @@
-use crate::nfa::{State, StateList};
+use crate::nfa::State;
 use crate::parser;
 use quote::quote;
 use quote::{ToTokens, TokenStreamExt};

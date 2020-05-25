@@ -1,33 +1,25 @@
-use rejects::rejects::Rejects;
-
 fn main() {
-    let res = Rejects::new(r"(\d\d\d\d)-(\d\d)-(\d\d)");
-    // let res = parser::Parser::parse("(a|b)*(http:|https:)//www google com+");
-    if let Ok(regex) = res {
-        // println!("{:?}", regex);
-        println!("{}", regex.find_end("2010-03-14"));
-        println!("{}", regex.find_end("2010-03-14 ss"));
-        println!("{}", regex.find_end("Ac1234 	"));
-        println!("{}", regex.find_end("1"));
-        println!("{}", regex.find_end("2"));
-        println!("{}", regex.find_end("3"));
-        println!("{}", regex.find_end("a"));
-        println!("{}", regex.find_end("b"));
-        println!("{}", regex.find_end("c"));
-        println!("{}", regex.find_end("d"));
-        println!("{}", regex.find_end("abababaaahttp://www google com"));
-        println!("{}", regex.find_end("https://www google commmmm"));
-        println!("{}", regex.find_end("https://www google com"));
-        println!("{}", regex.find_end("http://www google com"));
-        println!("{}", regex.find_end("http://www google co"));
-        println!("{}", regex.find_end("dabc"));
-        println!("{}", regex.find_end("abc"));
-        println!("{}", regex.find_end("abd"));
-        println!("{}", regex.find_end("abdabcaaaaa"));
-        println!("{}", regex.find_end("aaaa"));
-        println!("{}", regex.find_end("a"));
-        println!("{}", regex.find_end(""));
-    } else if let Err(e) = res {
-        println!("Error: {:?}", e);
-    }
+    let re = rejects::make_rejects!(r"(\d\d\d\d)-(\d\d)-(\d\d)");
+    println!("{}", re.find_end("2010-03-14"));
+    println!("{}", re.find_end("2010-03-14 ss"));
+    println!("{}", re.find_end("Ac1234 	"));
+    println!("{}", re.find_end("1"));
+    println!("{}", re.find_end("2"));
+    println!("{}", re.find_end("3"));
+    println!("{}", re.find_end("a"));
+    println!("{}", re.find_end("b"));
+    println!("{}", re.find_end("c"));
+    println!("{}", re.find_end("d"));
+    println!("{}", re.find_end("abababaaahttp://www google com"));
+    println!("{}", re.find_end("https://www google commmmm"));
+    println!("{}", re.find_end("https://www google com"));
+    println!("{}", re.find_end("http://www google com"));
+    println!("{}", re.find_end("http://www google co"));
+    println!("{}", re.find_end("dabc"));
+    println!("{}", re.find_end("abc"));
+    println!("{}", re.find_end("abd"));
+    println!("{}", re.find_end("abdabcaaaaa"));
+    println!("{}", re.find_end("aaaa"));
+    println!("{}", re.find_end("a"));
+    println!("{}", re.find_end(""));
 }

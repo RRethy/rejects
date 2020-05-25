@@ -1,3 +1,8 @@
+use proc_macro_hack::proc_macro_hack;
+
+#[proc_macro_hack]
+pub use rejects_macro::make_rejects;
+
 pub mod builder;
 mod character_sets;
 pub mod nfa;

@@ -9,3 +9,5 @@ edition = "2018"
 [dependencies]
 quote = "1.0"
 proc-macro2 = "1.0"
+proc-macro-hack = "0.5"
+rejects_macro = { git = "https://github.com/rrethy/rejects_macro" }
